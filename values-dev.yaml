@@ -22,5 +22,23 @@ PG:
     Username: dev_user
     Password: dev_password
 
+# Database Configuration (for example2)
+Database:
+  URL: postgresql://user:pass@localhost:5432/mydb
+
+# Redis Configuration (for example2)
+Redis:
+  Host: redis.example.com
+  Port: 6379
+
+# Logging Configuration (for example2)
+Logging:
+  Level: INFO
+
+# Ingress Configuration (for example2)
+Ingress:
+  Host: myapp.example.com
+  Path: /
+
 # Missing some variables to demonstrate the checker
 # Notice that PG.R1.Port is missing, Service.NodePort is missing

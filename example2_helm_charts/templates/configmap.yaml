@@ -1,0 +1,9 @@
+apiVersion: apps/v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.AppName }}-config
+data:
+  database_url: {{ .Values.Database.URL | quote }}
+  redis_host: {{ .Values.Redis.Host }}
+  redis_port: {{ .Values.Redis.Port | quote }}
+  log_level: {{ .Values.Logging.Level }}

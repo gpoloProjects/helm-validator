@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: BillOfMaterials
+metadata:
+  name: my-application-bom
+  version: 1.0.0
+spec:
+  workloadList:
+    - name: main-application
+      type: helm
+      helm:
+        chartPath: ./example_helm_charts
+      description: Main application Helm chart
+    - name: supporting-services
+      type: helm  
+      helm:
+        chartPath: ./example2_helm_charts
+      description: Supporting services and configuration

@@ -38,6 +38,8 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Single Helm Chart Directory
+
 **Windows:**
 ```bash
 py helm_variable_checker.py --helm-charts-path /path/to/your/helm/charts --values-file /path/to/values.yaml
@@ -48,8 +50,22 @@ py helm_variable_checker.py --helm-charts-path /path/to/your/helm/charts --value
 python helm_variable_checker.py --helm-charts-path /path/to/your/helm/charts --values-file /path/to/values.yaml
 ```
 
+### Multiple Helm Charts via BOM File
+
+**Windows:**
+```bash
+py helm_variable_checker.py --bom-file /path/to/your/bom.yaml --values-file /path/to/values.yaml
+```
+
+**Linux/macOS:**
+```bash
+python helm_variable_checker.py --bom-file /path/to/your/bom.yaml --values-file /path/to/values.yaml
+```
+
 ### Quick Test
 Test with the included example files:
+
+**Single chart:**
 ```bash
 # Windows
 py helm_variable_checker.py --helm-charts-path ./example_helm_charts --values-file ./values-dev.yaml
@@ -58,14 +74,52 @@ py helm_variable_checker.py --helm-charts-path ./example_helm_charts --values-fi
 python helm_variable_checker.py --helm-charts-path ./example_helm_charts --values-file ./values-dev.yaml
 ```
 
+**Multiple charts via BOM:**
+```bash
+# Windows
+py helm_variable_checker.py --bom-file ./example-bom.yaml --values-file ./values-dev.yaml
+
+# Linux/macOS
+python helm_variable_checker.py --bom-file ./example-bom.yaml --values-file ./values-dev.yaml
+```
+
 ## Command Line Arguments
 
-### Required Arguments
+### Required Arguments (Choose one chart source)
 - `--helm-charts-path`: Path to directory containing Helm charts
+- `--bom-file`: Path to BOM file containing workloadList with helm.chartPath entries
+
+### Required Arguments  
 - `--values-file`: Path to the values YAML file to validate against
 
 ### Optional Arguments
 - `--help`: Show help message and exit
+
+## BOM File Format
+
+The BOM (Bill of Materials) file should follow this structure:
+
+```yaml
+apiVersion: v1
+kind: BillOfMaterials
+metadata:
+  name: my-application-bom
+  version: 1.0.0
+spec:
+  workloadList:
+    - name: main-application
+      type: helm
+      helm:
+        chartPath: ./path/to/first/chart
+      description: Main application Helm chart
+    - name: supporting-services
+      type: helm  
+      helm:
+        chartPath: ./path/to/second/chart
+      description: Supporting services and configuration
+```
+
+The tool will traverse through `spec.workloadList` and extract all `helm.chartPath` values to validate against your values file.
 
 ## Examples and Advanced Usage
 

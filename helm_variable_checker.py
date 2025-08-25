@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 
 
 class HelmVariableChecker:
-    def __init__(self, helm_charts_path: str, values_file_path: str):
-        self.helm_charts_path = Path(helm_charts_path)
+    def __init__(self, helm_charts_paths: List[str], values_file_path: str):
+        self.helm_charts_paths = [Path(path) for path in helm_charts_paths]
         self.values_file_path = Path(values_file_path)
         self.values_data = {}
         self.helm_file_extensions = {'.yaml', '.yml', '.tpl'}
@@ -103,23 +103,64 @@ class HelmVariableChecker:
     
     def get_helm_chart_files(self) -> List[Path]:
         """
-        Get all Helm chart files in the specified directory.
+        Get all Helm chart files in the specified directories.
         
         Returns:
             List of Path objects for Helm chart files
         """
         helm_files = []
         
-        try:
-            for root, dirs, files in os.walk(self.helm_charts_path):
-                for file in files:
-                    file_path = Path(root) / file
-                    if file_path.suffix.lower() in self.helm_file_extensions:
-                        helm_files.append(file_path)
-        except Exception as e:
-            logger.error(f"Error traversing helm charts directory {self.helm_charts_path}: {e}")
+        for helm_charts_path in self.helm_charts_paths:
+            try:
+                for root, dirs, files in os.walk(helm_charts_path):
+                    for file in files:
+                        file_path = Path(root) / file
+                        if file_path.suffix.lower() in self.helm_file_extensions:
+                            helm_files.append(file_path)
+            except Exception as e:
+                logger.error(f"Error traversing helm charts directory {helm_charts_path}: {e}")
         
         return helm_files
+
+    @staticmethod
+    def parse_bom_file(bom_file_path: str) -> List[str]:
+        """
+        Parse a BOM file and extract Helm chart paths from spec.workloadList.
+        
+        Args:
+            bom_file_path: Path to the BOM YAML file
+            
+        Returns:
+            List of Helm chart paths found in the BOM file
+        """
+        chart_paths = []
+        
+        try:
+            with open(bom_file_path, 'r', encoding='utf-8') as file:
+                bom_data = yaml.safe_load(file)
+            
+            # Navigate to spec.workloadList
+            if 'spec' in bom_data and 'workloadList' in bom_data['spec']:
+                workload_list = bom_data['spec']['workloadList']
+                
+                for workload in workload_list:
+                    # Look for helm.chartPath in each workload
+                    if 'helm' in workload and 'chartPath' in workload['helm']:
+                        chart_path = workload['helm']['chartPath']
+                        chart_paths.append(chart_path)
+                        logger.info(f"Found Helm chart path in BOM: {chart_path}")
+                
+            if not chart_paths:
+                logger.warning("No Helm chart paths found in BOM file")
+                
+        except FileNotFoundError:
+            logger.error(f"BOM file not found: {bom_file_path}")
+        except yaml.YAMLError as e:
+            logger.error(f"Error parsing BOM YAML file {bom_file_path}: {e}")
+        except Exception as e:
+            logger.error(f"Error reading BOM file {bom_file_path}: {e}")
+            
+        return chart_paths
     
     def generate_report(self) -> List[Tuple[str, str, bool]]:
         """
@@ -138,7 +179,19 @@ class HelmVariableChecker:
         total_variables = 0
         
         for file_path in helm_files:
-            relative_path = file_path.relative_to(self.helm_charts_path)
+            # Find which base path this file belongs to
+            relative_path = None
+            for base_path in self.helm_charts_paths:
+                try:
+                    relative_path = file_path.relative_to(base_path)
+                    break
+                except ValueError:
+                    continue
+            
+            # If we couldn't find a relative path, use the full path
+            if relative_path is None:
+                relative_path = file_path
+                
             variables = self.extract_variables_from_file(file_path)
             
             if variables:
@@ -157,7 +210,7 @@ class HelmVariableChecker:
         logger.info("=" * 80)
         logger.info("HELM VARIABLE REFERENCE CHECKER REPORT")
         logger.info("=" * 80)
-        logger.info(f"Helm Charts Path: {self.helm_charts_path}")
+        logger.info(f"Helm Charts Paths: {', '.join(str(p) for p in self.helm_charts_paths)}")
         logger.info(f"Values File: {self.values_file_path}")
         logger.info("=" * 80)
         
@@ -201,11 +254,18 @@ def main():
     parser = argparse.ArgumentParser(
         description="Check Helm chart variable references against values file"
     )
-    parser.add_argument(
+    
+    # Create mutually exclusive group for chart path options
+    path_group = parser.add_mutually_exclusive_group(required=True)
+    path_group.add_argument(
         '--helm-charts-path',
-        required=True,
         help='Path to the directory containing Helm charts'
     )
+    path_group.add_argument(
+        '--bom-file',
+        help='Path to BOM file containing workloadList with helm.chartPath entries'
+    )
+    
     parser.add_argument(
         '--values-file',
         required=True,
@@ -214,28 +274,56 @@ def main():
     
     args = parser.parse_args()
     
-    # Validate paths
-    helm_charts_path = Path(args.helm_charts_path)
+    # Determine chart paths based on input method
+    chart_paths = []
+    
+    if args.helm_charts_path:
+        # Single chart path provided
+        helm_charts_path = Path(args.helm_charts_path)
+        if not helm_charts_path.exists():
+            logger.error(f"Helm charts directory does not exist: {helm_charts_path}")
+            return 1
+        if not helm_charts_path.is_dir():
+            logger.error(f"Helm charts path is not a directory: {helm_charts_path}")
+            return 1
+        chart_paths = [str(helm_charts_path)]
+        
+    elif args.bom_file:
+        # BOM file provided - extract chart paths
+        bom_file_path = Path(args.bom_file)
+        if not bom_file_path.exists():
+            logger.error(f"BOM file does not exist: {bom_file_path}")
+            return 1
+        if not bom_file_path.is_file():
+            logger.error(f"BOM path is not a file: {bom_file_path}")
+            return 1
+            
+        chart_paths = HelmVariableChecker.parse_bom_file(str(bom_file_path))
+        if not chart_paths:
+            logger.error("No valid Helm chart paths found in BOM file")
+            return 1
+            
+        # Validate all chart paths from BOM
+        for chart_path in chart_paths:
+            path_obj = Path(chart_path)
+            if not path_obj.exists():
+                logger.error(f"Helm charts directory from BOM does not exist: {path_obj}")
+                return 1
+            if not path_obj.is_dir():
+                logger.error(f"Helm charts path from BOM is not a directory: {path_obj}")
+                return 1
+    
+    # Validate values file
     values_file_path = Path(args.values_file)
-    
-    if not helm_charts_path.exists():
-        logger.error(f"Helm charts directory does not exist: {helm_charts_path}")
-        return 1
-    
-    if not helm_charts_path.is_dir():
-        logger.error(f"Helm charts path is not a directory: {helm_charts_path}")
-        return 1
-    
     if not values_file_path.exists():
         logger.error(f"Values file does not exist: {values_file_path}")
         return 1
-    
     if not values_file_path.is_file():
         logger.error(f"Values path is not a file: {values_file_path}")
         return 1
     
     # Create checker and run report
-    checker = HelmVariableChecker(str(helm_charts_path), str(values_file_path))
+    checker = HelmVariableChecker(chart_paths, str(values_file_path))
     checker.print_report()
     
     return 0
