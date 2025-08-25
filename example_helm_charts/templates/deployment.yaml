@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.AppName | quote }}
+  labels:
+    app: {{ .Values.AppName }}
+spec:
+  replicas: {{ .Values.ReplicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.AppName }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.AppName }}
+    spec:
+      containers:
+      - name: {{ .Values.AppName }}
+        image: {{ .Values.Image.Repository }}:{{ .Values.Image.Tag }}
+        ports:
+        - containerPort: {{ .Values.Service.Port }}
+        env:
+        - name: DB_NAME
+          value: {{ .Values.PG.R1.DBName | quote }}
+        - name: DB_HOST
+          value: {{ .Values.PG.R1.Host }}
+        - name: DB_USER
+          value: {{ .Values.PG.R1.Username }}

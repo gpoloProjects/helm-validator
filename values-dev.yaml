@@ -1,0 +1,26 @@
+# Application Configuration
+AppName: my-awesome-app
+ReplicaCount: 3
+
+# Image Configuration
+Image:
+  Repository: myregistry/my-app
+  Tag: v1.2.3
+  PullPolicy: Always
+
+# Service Configuration
+Service:
+  Type: ClusterIP
+  Port: 8080
+  TargetPort: 8080
+
+# PostgreSQL Configuration
+PG:
+  R1:
+    DBName: myapp_dev_db
+    Host: postgres-dev.example.com
+    Username: dev_user
+    Password: dev_password
+
+# Missing some variables to demonstrate the checker
+# Notice that PG.R1.Port is missing, Service.NodePort is missing
