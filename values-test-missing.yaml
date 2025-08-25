@@ -1,0 +1,22 @@
+# Test values file with missing variables
+AppName: my-test-app
+ReplicaCount: 2
+
+# Image Configuration - missing Tag
+Image:
+  Repository: myregistry/test-app
+  # Tag: v1.0.0  # This is missing!
+  PullPolicy: Always
+
+# Service Configuration - missing TargetPort
+Service:
+  Type: ClusterIP
+  Port: 8080
+  # TargetPort: 8080  # This is missing!
+
+# PostgreSQL Configuration - missing some fields
+PG:
+  R1:
+    DBName: test_db
+    # Host: postgres.example.com  # This is missing!
+    # Username: test_user  # This is missing!

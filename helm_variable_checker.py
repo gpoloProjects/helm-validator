@@ -211,16 +211,8 @@ def main():
         required=True,
         help='Path to the values YAML file (e.g., values-dev.yaml)'
     )
-    parser.add_argument(
-        '--verbose',
-        action='store_true',
-        help='Enable verbose logging'
-    )
     
     args = parser.parse_args()
-    
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
     
     # Validate paths
     helm_charts_path = Path(args.helm_charts_path)
