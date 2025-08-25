@@ -27,8 +27,9 @@ logger = logging.getLogger(__name__)
 
 class HelmVariableChecker:
     def __init__(self, helm_charts_paths: List[str], values_file_path: str):
-        self.helm_charts_paths = [Path(path) for path in helm_charts_paths]
-        self.values_file_path = Path(values_file_path)
+        # Keep paths as strings to preserve relative path format
+        self.helm_charts_paths = helm_charts_paths
+        self.values_file_path = values_file_path
         self.values_data = {}
         self.helm_file_extensions = {'.yaml', '.yml', '.tpl'}
         
@@ -110,7 +111,8 @@ class HelmVariableChecker:
         """
         helm_files = []
         
-        for helm_charts_path in self.helm_charts_paths:
+        for helm_charts_path_str in self.helm_charts_paths:
+            helm_charts_path = Path(helm_charts_path_str)
             try:
                 for root, dirs, files in os.walk(helm_charts_path):
                     for file in files:
@@ -179,27 +181,32 @@ class HelmVariableChecker:
         total_variables = 0
         
         for file_path in helm_files:
-            # Find which base path this file belongs to
+            # Find which base path this file belongs to and create relative path
             relative_path = None
-            for base_path in self.helm_charts_paths:
+            for base_path_str in self.helm_charts_paths:
+                base_path = Path(base_path_str)
                 try:
                     relative_path = file_path.relative_to(base_path)
+                    # Combine base path string with relative path for display
+                    display_path = f"{base_path_str}/{relative_path}".replace('\\', '/')
                     break
                 except ValueError:
                     continue
             
             # If we couldn't find a relative path, use the full path
             if relative_path is None:
-                relative_path = file_path
+                display_path = str(file_path).replace('\\', '/')
+            else:
+                display_path = str(relative_path).replace('\\', '/')
                 
             variables = self.extract_variables_from_file(file_path)
             
             if variables:
-                logger.info(f"Processing file: {relative_path} ({len(variables)} variables found)")
+                logger.info(f"Processing file: {display_path} ({len(variables)} variables found)")
                 
                 for variable in sorted(variables):
                     exists = self.check_variable_exists(variable)
-                    report.append((str(relative_path), variable, exists))
+                    report.append((display_path, variable, exists))
                     total_variables += 1
         
         logger.info(f"Total variables processed: {total_variables}")
@@ -210,7 +217,7 @@ class HelmVariableChecker:
         logger.info("=" * 80)
         logger.info("HELM VARIABLE REFERENCE CHECKER REPORT")
         logger.info("=" * 80)
-        logger.info(f"Helm Charts Paths: {', '.join(str(p) for p in self.helm_charts_paths)}")
+        logger.info(f"Helm Charts Paths: {', '.join(self.helm_charts_paths)}")
         logger.info(f"Values File: {self.values_file_path}")
         logger.info("=" * 80)
         
@@ -286,7 +293,8 @@ def main():
         if not helm_charts_path.is_dir():
             logger.error(f"Helm charts path is not a directory: {helm_charts_path}")
             return 1
-        chart_paths = [str(helm_charts_path)]
+        # Keep the original path as provided (relative if given as relative)
+        chart_paths = [args.helm_charts_path]
         
     elif args.bom_file:
         # BOM file provided - extract chart paths
@@ -307,23 +315,23 @@ def main():
         for chart_path in chart_paths:
             path_obj = Path(chart_path)
             if not path_obj.exists():
-                logger.error(f"Helm charts directory from BOM does not exist: {path_obj}")
+                logger.error(f"Helm charts directory from BOM does not exist: {chart_path}")
                 return 1
             if not path_obj.is_dir():
-                logger.error(f"Helm charts path from BOM is not a directory: {path_obj}")
+                logger.error(f"Helm charts path from BOM is not a directory: {chart_path}")
                 return 1
     
     # Validate values file
     values_file_path = Path(args.values_file)
     if not values_file_path.exists():
-        logger.error(f"Values file does not exist: {values_file_path}")
+        logger.error(f"Values file does not exist: {args.values_file}")
         return 1
     if not values_file_path.is_file():
-        logger.error(f"Values path is not a file: {values_file_path}")
+        logger.error(f"Values path is not a file: {args.values_file}")
         return 1
     
-    # Create checker and run report
-    checker = HelmVariableChecker(chart_paths, str(values_file_path))
+    # Create checker and run report (keeping original relative path)
+    checker = HelmVariableChecker(chart_paths, args.values_file)
     checker.print_report()
     
     return 0
